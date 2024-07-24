@@ -31,6 +31,7 @@ export plot_ray
 # geometry.jl
 
 export Region, Boundary
+export identify_regions
 export get_region, get_normals, get_boundary
 
 
@@ -38,13 +39,16 @@ using Plots
 using RecipesBase
 using MultipleScattering
 using LinearAlgebra
-using Images
+using Images, ImageSegmentation
+using Statistics
 
 include("types.jl")
 include("utils.jl")
 include("geometry.jl")
 include("plots.jl")
 include("ray_physics.jl")
+include("boundary_logic.jl")
+include("sources.jl")
 include("ray_tracing.jl")
 
 end
