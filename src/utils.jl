@@ -12,10 +12,9 @@ function grad_to_field(domain::Domain, grad::VelocityGradients)
     return slowness_field
 end
 
-function initialise_fields(domain::Domain,vel::VelocityGradients)
+function initialise_fields(domain::Domain, slowness_field::Matrix{Float64}, ρ_field::Matrix{Float64})
     nx = domain.x_dims; nz = domain.z_dims
     
-    slowness_field = grad_to_field(domain, vel)
     du_dx = zeros(nz,nx)
     du_dz = zeros(nz,nx)
 
@@ -29,7 +28,7 @@ function initialise_fields(domain::Domain,vel::VelocityGradients)
     du_dz[[end],:] = du_dz[[end-1],:]
     du_dx[:,[end]] = du_dx[:,[end-1]]
     
-    return DomainFields(slowness_field,du_dx,du_dz)
+    return DomainFields(slowness_field, ρ_field,du_dx, du_dz)
 end
 
 function image_to_domain(image_name::String)
@@ -45,6 +44,14 @@ function image_to_domain(image_name::String)
     return Domain(z_dims,x_dims,binary_domain,boundary_normals)
 end
 
+function image_to_domain(image_name::String, threshold::Float64)
+    domain, ids = identify_regions(image_name, threshold)
+    (z_dims,x_dims) = size(domain)
+    boundary_normals = get_normals(domain)
+    
+    return Domain(z_dims,x_dims,domain,boundary_normals)
+end
+
 function get_submatrix(matrix::Matrix, z::Float64, x::Float64)
     # Gets 3x3 matrix around points z,x  
     zz = Int(round(z)); xx = Int(round(x))
@@ -53,7 +60,7 @@ function get_submatrix(matrix::Matrix, z::Float64, x::Float64)
     else
         submatrix = matrix[(zz-1):(zz+1),(xx-1):(xx+1)]
     end
-    return submatrix
+    return submatrix,xx,zz
 end
 
 function interpolate_field(field::Matrix, x::Number, z::Number)
@@ -77,4 +84,12 @@ function interpolate_field(field::Matrix, x::Number, z::Number)
     end
 
     return interp_val
+end
+
+function save_ray_data(i::Int64,ray::Ray,ray_data::RayData)
+    if i in ray_data.indices
+        j = findfirst(x -> x == i, ray_data.indices)
+        ray_data.position[j:end,:] .= ray.position'
+    end
+    return ray_data
 end
