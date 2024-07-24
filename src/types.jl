@@ -32,12 +32,13 @@ end
 struct Domain
    z_dims::Int64
    x_dims::Int64
-   binary_domain::Matrix{Bool}
+   domain::Matrix
    boundary_normals::Array{Float64, 3}
 end
 
 struct DomainFields
     slowness_field::Matrix{Float64}
+    ρ_field::Matrix{Float64}
     du_dx::Matrix{Float64}
     du_dz::Matrix{Float64}
 end
@@ -49,7 +50,15 @@ struct VelocityGradients
 end
 
 struct RaySimulation
+    ICs::InitialConditions
     domain::Domain
+    params::Parameters
+    fields::DomainFields
+    ray_data::RayData
+end
+
+struct RaySimulationResult
     ray::Ray
-    parameters::Parameters
+    ray_data::RayData
+    amps::Matrix
 end
