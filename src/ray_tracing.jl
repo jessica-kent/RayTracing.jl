@@ -17,8 +17,6 @@ end
 
 function initialise_ray_data(domain::Domain, params::Parameters, no_samples::Int64)
     
-    dom = domain.binary_domain
-    
     t_max = maximum(params.time)
     sampling_time = collect(range(0,t_max,no_samples));
 
@@ -28,14 +26,14 @@ function initialise_ray_data(domain::Domain, params::Parameters, no_samples::Int
     end
 
     position = zeros(no_samples,2)
-    amplitudes = zeros(size(dom,1), size(dom,2))
-
+    amplitudes = zeros(domain.z_dims, domain.x_dims)
+   
     return RayData(position, indices, amplitudes)
 end
 
 function initialise_parameters(t_max::Number,no_rays::Int,angle_range::Vector, fields::DomainFields)
     v_max = maximum(1 ./ fields.slowness_field)
-    ds = 0.5
+    ds = 1
     dt = ds/v_max
     time = collect(0:dt:t_max)
     angles = 0
@@ -47,7 +45,7 @@ function initialise_parameters(t_max::Number,no_rays::Int,angle_range::Vector, f
     return Parameters(time,angles)
 end
 
-function advance_ray(params::Parameters,fields::DomainFields,ray::Ray)
+function advance_ray(ICs::InitialConditions,params::Parameters,fields::DomainFields,ray::Ray, distance_travelled::Float64)
     x  = ray.position[1];   z  = ray.position[2]
     sx = ray.slowness[1];   sz = ray.slowness[2]
 
@@ -63,44 +61,72 @@ function advance_ray(params::Parameters,fields::DomainFields,ray::Ray)
     x += dx;                        z += dz;
     
     position  = [x, z]
-    direction = [dx, dz]
+    direction = normalize([dx, dz])
     slowness  = [sx, sz]
-
-    amp = ray.amp
+    if distance_travelled != 0.0
+        amp = ICs.amplitude / sqrt(distance_travelled)
+    else
+        amp = ICs.amplitude
+    end
     
     return Ray(position,direction,amp,slowness)
 end
 
-function calculate_ray(ICs::InitialConditions,domain::Domain,
-    params::Parameters,fields::DomainFields,ray_data::RayData)
-    
-    function save_ray_data(i::Int64,ray::Ray,ray_data::RayData)
-        if i in ray_data.indices
-            j = findfirst(x -> x == i, ray_data.indices)
-            ray_data.position[j:end,:] .= ray.position'
-        end
-        return ray_data
-    end
 
+function calculate_ray(sim::RaySimulation, boundary_type::TransmissionType)
+    
+    domain = sim.domain
+    fields = sim.fields
+    ICs = sim.ICs
+    ray_data = sim.ray_data
+    params = sim.params
     ray = initialise_ray(ICs,params)
+
     if size(ray_data.position,1) != 0
         ray_data.position[1,:] = ICs.position
     end
+
     steps = size(params.time, 1)
+    distance_travelled = 0.0
+    amps = ray_data.amplitudes
+    transmitted = false
 
     for i = 2:steps-1
-        x = ray.position[1];   z = ray.position[2];
+        is_in_domain = in_domain(ray, domain)
 
-        if 1 <= z <= domain.z_dims && 1 <= x <= domain.x_dims
-            # Confirms ray is in domain
-            submatrix = get_submatrix(domain.binary_domain,z,x)
-            if sum(submatrix) > 2
-                # Reflective boundary encountered 
-                # needs to be updated
-                ray = reflect_ray(domain,params,fields,ray)
+        if is_in_domain == true
+            at_boundary = boundary_detect(domain, ray; transmitted)
+            if at_boundary==true
+                nodes = Int.(round.(ray.position))
+                nodex = nodes[1]
+                nodez = nodes[2]
+
+                amps[nodez,nodex] += ray.amp
+                id = domain.domain[nodez,nodex]
+                media = get_media(fields, ray.position[2], ray.position[1], domain, id)
+
+                ratio = media[1].c/media[2].c |>real
+                
+                critical = is_critical(domain, ray, ratio)
+                
+                if critical == true
+                    ray = reflect_ray(domain,params,fields,ray)
+                else
+                    ray = transmit_ray(domain, ray, params, media)
+                end
+
+                transmitted = true
             else
-                # No reflection, continue as normal
-                ray = advance_ray(params,fields,ray)
+                nodes = Int.(round.(ray.position))
+                nodex = nodes[1]
+                nodez = nodes[2]
+                old_position = ray.position
+
+                ray = advance_ray(ICs,params,fields,ray, distance_travelled)
+
+                distance_travelled += norm(ray.position - old_position)
+                transmitted = false
+                amps[nodez,nodex] += ray.amp
             end
         else
             # Ray has left the Domain
@@ -112,5 +138,55 @@ function calculate_ray(ICs::InitialConditions,domain::Domain,
         end    
 
     end
-    return ray, ray_data
+    return RaySimulationResult(ray, ray_data, amps)
+end
+
+
+function calculate_ray(sim::RaySimulation, boundary_type::ReflectionType)
+    
+    domain = sim.domain
+    fields = sim.fields
+    ICs = sim.ICs
+    ray_data = sim.ray_data
+    params = sim.params
+
+    ray = initialise_ray(ICs,params)
+
+    if size(ray_data.position,1) != 0
+        ray_data.position[1,:] = ICs.position
+    end
+
+    steps = size(params.time, 1)
+    distance_travelled = 0.0
+    amps = ray_data.amplitudes
+    for i = 2:steps-1
+        is_in_domain = in_domain(ray, domain)
+        
+        if is_in_domain == true
+            nodes = Int.(round.(ray.position))
+            nodex = nodes[1]
+            nodez = nodes[2]
+            amps[nodez,nodex] += ray.amp
+            at_boundary = boundary_detect(domain, ray)
+            if at_boundary==true
+                nodes = Int.(round.(ray.position))
+                nodex = nodes[1]
+                nodez = nodes[2]
+                ray = reflect_ray(domain,params,fields,ray)
+            else
+                old_position = ray.position
+                ray = advance_ray(ICs,params,fields,ray, distance_travelled)
+                distance_travelled += norm(ray.position - old_position)
+            end
+        else
+            # Ray has left the Domain
+            break
+        end
+
+        if size(ray_data.position,1) != 0
+            ray_data = save_ray_data(i,ray,ray_data)
+        end    
+
+    end
+    return RaySimulationResult(ray, ray_data, amps)
 end
