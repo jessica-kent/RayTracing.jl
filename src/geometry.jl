@@ -1,29 +1,23 @@
-struct Region
-    indices::Vector{CartesianIndex{2}}
-    slowness_field::Matrix{Float64}
-    ρ_field::Matrix{Float64}
-end
-
 struct Boundary
     indices::Vector{CartesianIndex{2}}
+    id::Int
     normals::Array{Float64, 3}
-    boundary_type::BoundaryType
 end
 
+function identify_regions(filename::String, threshold::Float64)
+    img = load(filename)
+    
+    segments = unseeded_region_growing(img, threshold)
 
-function get_region(domain::Matrix{Float64}, id::Int, fields::DomainFields)
+    domain_ids = segments.segment_labels
+    id_map = labels_map(segments)
+    return id_map, domain_ids
+end
+
+function get_region(domain::Matrix{Float64}, id::Int)
     inds = findall(iszero.(domain .- id), domain)
-    full_slowness_field = fields.slowness_field
-    full_ρ_field = fields.ρ_field
-    slowness_field = zeros(size(full_slowness_field))
-    ρ_field = zeros(size(full_ρ_field))
 
-    for i in inds
-        slowness_field[i] += full_slowness_field[i]
-        ρ_field[i] += full_ρ_field[i]
-    end
-
-    return Region(inds, slowness_field, ρ_field)
+    return Region(inds)
 end
 
 function get_normals(boundaries::Matrix)
@@ -37,7 +31,7 @@ function get_normals(boundaries::Matrix)
         for jj = (j-1):(j+1)
             grad_x += boundaries[jj,(i+1)] - boundaries[jj,(i-1)]
         end
-        normals = [-grad_x/3, grad_z/3]
+        normals = [grad_x/3, -grad_z/3]
         if normals != [0, 0]
             boundary_normals[j,i,1] = normalize(normals)[1];
             boundary_normals[j,i,2] = normalize(normals)[2];
@@ -49,23 +43,19 @@ function get_normals(boundaries::Matrix)
     return boundary_normals
 end
 
-function get_boundary(domain::Matrix{Float64}, region::Region, boundary_type::BoundaryType)
-   
-    subdomain = get_subdomain(domain, region)
-    nz,nx = size(subdomain)
-    boundary = zeros(nz,nx)
+function get_boundaries(domain::Matrix{Float64})
     
-    for i=2:nz-1,j=2:nx-1
-        three_by_three = get_submatrix(subdomain,i,j)
-        condition = three_by_three .- subdomain[i,j]
-        if iszero(condition)
-        else
-            boundary[i,j] = 1
-        end
+    domain_field = domain.domain
+    normals = domain.boundary_normals
+    boundaries_field = (abs2.(normals[:,:,1])+abs2.(normals[:,:,2]))/2
+    boundary_inds = findall(!iszero, boundaries_field)
+    
+    for inds in boundary_inds
+        boundaries_field[inds] *= domain_field[inds]
     end
-    
-    indices = findall(!iszero, boundary)
-    normals = get_normals(boundary)
-    
-    return Boundary(indices, normals, boundary_type)
+
+
+
+
+
 end
