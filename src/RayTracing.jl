@@ -41,6 +41,7 @@ using MultipleScattering
 using LinearAlgebra
 using Images, ImageSegmentation
 using Statistics
+using FFTW
 
 include("types.jl")
 include("utils.jl")

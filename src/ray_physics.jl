@@ -1,9 +1,9 @@
 # ray physics
 
 function snells_law(domain::Domain, ray::Ray, media::Vector{Acoustic{Float64, 2}})
-    position = Int.(round.(ray.position))
-    normal = domain.boundary_normals[position[2], position[1],:]
-    tangent = [-normal[2], normal[1]]
+    
+    normal = [interpolate_field(domain.boundary_normals[:,:,1], ray.position[1], ray.position[2]), interpolate_field(domain.boundary_normals[:,:,2], ray.position[1], ray.position[2])]
+    tangent = [normal[2], -normal[1]]
     cs = [real(m.c) for m in media]
 
     #calculate angle from normal
@@ -23,9 +23,8 @@ end
 function snells_law(domain::Domain, ray::Ray)
     #Only returns reflected direction
     
-    position = Int.(round.(ray.position))
-    normal = domain.boundary_normals[position[2], position[1],:]
-    tangent = [-normal[2], normal[1]]
+    normal = [interpolate_field(domain.boundary_normals[:,:,1], ray.position[1], ray.position[2]), interpolate_field(domain.boundary_normals[:,:,2], ray.position[1], ray.position[2])]
+    tangent = [normal[2], -normal[1]]
     
     #calculate angle from normal
     cosθ1 = dot(normal, ray.direction)
@@ -61,11 +60,11 @@ function reflect_ray(domain::Domain,params::Parameters,fields::DomainFields,ray:
     x = ray.position[1];
     z = ray.position[2]
 
+
     
     v2 = snells_law(domain, ray)
 
     dx = v2[1]; dz = v2[2];
-    position += v2;
     u = interpolate_field(fields.slowness_field, x, z)
     sx = (dx/dt)*u^2; sz = (dz/dt)*u^2;
     

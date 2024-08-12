@@ -159,6 +159,7 @@ function calculate_ray(sim::RaySimulation, boundary_type::ReflectionType)
     steps = size(params.time, 1)
     distance_travelled = 0.0
     amps = ray_data.amplitudes
+    reflected = false
     for i = 2:steps-1
         is_in_domain = in_domain(ray, domain)
         
@@ -167,17 +168,27 @@ function calculate_ray(sim::RaySimulation, boundary_type::ReflectionType)
             nodex = nodes[1]
             nodez = nodes[2]
             amps[nodez,nodex] += ray.amp
-            at_boundary = boundary_detect(domain, ray)
+            at_boundary = boundary_detect(domain, ray; transmitted = reflected)
+            
+            nodes = Int.(round.(ray.position))
+            nodex = nodes[1]
+            nodez = nodes[2]
             if at_boundary==true
                 nodes = Int.(round.(ray.position))
                 nodex = nodes[1]
                 nodez = nodes[2]
                 ray = reflect_ray(domain,params,fields,ray)
-            else
-                old_position = ray.position
-                ray = advance_ray(ICs,params,fields,ray, distance_travelled)
-                distance_travelled += norm(ray.position - old_position)
+                reflected = true
+                println("position:", ray.position)
+                println("direction:", ray.direction)
+                println("normal:", domain.boundary_normals[nodez, nodex, :])
             end
+            
+            old_position = ray.position
+            ray = advance_ray(ICs,params,fields,ray, distance_travelled)
+            distance_travelled += norm(ray.position - old_position)
+            reflected = false
+            
         else
             # Ray has left the Domain
             break

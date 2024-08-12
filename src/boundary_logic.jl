@@ -76,3 +76,13 @@ function scatter_logic(domain::Domain, fields::DomainFields, ray::Ray, params::P
 
     return rays
 end
+
+function in_boundary(normal::Vector, direction::Vector)
+    is_in_boundary = false
+
+    if dot(normal, direction) == 0.0
+        is_in_boundary = true
+    end
+
+    return is_in_boundary
+end

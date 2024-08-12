@@ -33,7 +33,7 @@ struct Domain
    z_dims::Int64
    x_dims::Int64
    domain::Matrix
-   boundary_normals::Array{Float64, 3}
+   boundary_normals::Array{Float64,3}
 end
 
 struct DomainFields

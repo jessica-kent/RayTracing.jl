@@ -1,6 +1,6 @@
 using RayTracing
-using Test
+using Test, MultipleScattering, LinearAlgebra, Statistics
 
-@testset "RayTracing.jl" begin
-    # Write your tests here.
-end
+# Tests for reflection, transmission and amplitude tracking
+#include("ray_physics_test.jl")
+#include("utils_test.jl")
